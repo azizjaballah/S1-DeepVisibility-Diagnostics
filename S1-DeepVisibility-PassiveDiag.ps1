@@ -242,6 +242,7 @@ function Test-S1Tls12 {
         Error              = $null
         Protocol           = "TLS1.2"
         HttpErrorTolerated = $false  # true when 2xx–4xx but used as connectivity-success
+        ProxyAuthRequired  = $false
     }
 
     try {
@@ -263,7 +264,10 @@ function Test-S1Tls12 {
             $code = [int]$webEx.Response.StatusCode
             $result.StatusCode = $code
 
-            if ($code -ge 200 -and $code -lt 500) {
+            if ($code -eq 407) {
+                $result.ProxyAuthRequired = $true
+            }
+            elseif ($code -ge 200 -and $code -lt 500) {
                 # HTTP 4xx still means network/TLS is fine.
                 $result.Success            = $true
                 $result.HttpErrorTolerated = $true
@@ -284,6 +288,7 @@ function Get-WinHttpProxyInfo {
         Env_HTTPS_PROXY = $env:HTTPS_PROXY
         IEProxyEnabled  = $null
         IEProxyServer   = $null
+        Error           = $null
     }
 
     try {
@@ -298,7 +303,8 @@ function Get-WinHttpProxyInfo {
         }
     }
     catch {
-        $result.WinHttpProxyRaw = "Error: $($_.Exception.Message)"
+        $result.Error           = $_.Exception.Message
+        $result.WinHttpProxyRaw = "Error: $($result.Error)"
     }
 
     return $result
@@ -493,10 +499,45 @@ if (-not $tcpResult.TcpReachable) {
     $issues += "CRITICAL: Cannot reach $S1VisibilityHost on port 443"
 }
 
+# Collection errors
+if ($systemInfo.Error) {
+    $issues += "INFO: System info collection error: $($systemInfo.Error)"
+}
+if ($agentInfo.Error) {
+    $issues += "WARNING: Agent info collection error: $($agentInfo.Error)"
+}
+if ($dvConfig.Error) {
+    $issues += "WARNING: Deep Visibility config collection error: $($dvConfig.Error)"
+}
+if ($dnsResult.Error) {
+    $issues += "INFO: DNS test error detail: $($dnsResult.Error)"
+}
+if ($tcpResult.Error) {
+    $issues += "INFO: TCP test error detail: $($tcpResult.Error)"
+}
+if ($tlsResult.Error) {
+    $issues += "INFO: TLS test error detail: $($tlsResult.Error)"
+}
+if ($proxyResult.Error) {
+    $issues += "INFO: Proxy collection error: $($proxyResult.Error)"
+}
+if ($fwResult.Error) {
+    $issues += "INFO: Firewall collection error: $($fwResult.Error)"
+}
+if ($logInfo.Error) {
+    $issues += "INFO: Agent log collection error: $($logInfo.Error)"
+}
+if ($netStats.Error) {
+    $issues += "INFO: Network stats collection error: $($netStats.Error)"
+}
+
 # RELAXED TLS: only CRITICAL if Success is false AND we did not just tolerate an HTTP 4xx
 # NOTE: S1 Deep Visibility endpoints may reject browser-like requests with TLS errors
 # even when agent connectivity is working properly
-if (-not $tlsResult.Success -and -not $tlsResult.HttpErrorTolerated) {
+if ($tlsResult.ProxyAuthRequired) {
+    $issues += "CRITICAL: HTTP 407 Proxy Authentication Required for $S1VisibilityUri - proxy prevents Deep Visibility connectivity"
+}
+elseif (-not $tlsResult.Success -and -not $tlsResult.HttpErrorTolerated) {
     $issues += "INFO: TLS 1.2 test failed (this is NORMAL for DV endpoints - they reject non-agent requests)"
 }
 elseif ($tlsResult.HttpErrorTolerated) {
@@ -513,7 +554,7 @@ if ($proxyResult.WinHttpProxyRaw -and $proxyResult.WinHttpProxyRaw -notmatch "Di
 ###############
 $out = [ordered]@{
     Timestamp         = (Get-Date)
-    DiagnosticVersion = "1.1-relaxed"
+    DiagnosticVersion = "1.2-proxy-errors"
     System            = $systemInfo
     Agent             = $agentInfo
     DeepVisibility    = $dvConfig
