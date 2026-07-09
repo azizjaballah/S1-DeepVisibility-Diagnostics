@@ -1,61 +1,65 @@
-# SentinelOne Deep Visibility Diagnostics
+# SentinelOne Deep Visibility Passive Diagnostics
 
-This project collects the SentinelOne Deep Visibility diagnostic scripts and related documentation that were found locally.
+This repository contains one selected version of the SentinelOne Deep Visibility diagnostic script plus the matching troubleshooting documentation.
 
-## Recommended Script
+## Selected Script
 
 Use:
 
 ```powershell
-scripts/recommended/zip-source/DiagnoseNET.ps1
+.\S1-DeepVisibility-PassiveDiag.ps1 -S1VisibilityHost "ioc-gw-prod-eu-1b.sentinelone.net" -VerboseOutput
 ```
 
-This is the packaged `DiagnoseNET.ps1` variant from `DiagnoseNET.ps1.zip`. It is the most stable candidate for customer or RemoteOps use because it:
+The included script is the latest locally found version:
 
-- identifies itself as `DiagnosticVersion = "1.2-remoteops-safe"`
-- writes to `$env:TEMP\S1-DeepVisibilityDiag.json`
-- performs an early write test
-- handles HTTP `407 Proxy Authentication Required` as a critical proxy finding
-- keeps all checks read-only
-
-The loose copy is also included here:
-
-```powershell
-scripts/recommended/DiagnoseNET-remoteops-safe.ps1
+```text
+S1-DeepVisibility-PassiveDiag.ps1
+Source: /Users/a.jaballah/Desktop/DVDiag/S1-DeepVisibility-PassiveDiag.ps1
+Modified: 2026-01-09 14:44:36 CET
+DiagnosticVersion: 1.1-relaxed
 ```
 
-## Script Inventory
+## Behavior
 
-| Path | Purpose |
-| --- | --- |
-| `scripts/recommended/zip-source/DiagnoseNET.ps1` | Recommended packaged RemoteOps-safe script |
-| `scripts/recommended/DiagnoseNET-remoteops-safe.ps1` | Loose `DiagnoseNET.ps1` copy |
-| `scripts/variants/S1-DeepVisibility-PassiveDiag-desktop-20260109.ps1` | Newer formatted `1.1-relaxed` variant from Desktop |
-| `scripts/variants/S1-DeepVisibility-PassiveDiag-downloads-20251124.ps1` | Older `1.1-relaxed` variant from Downloads |
-| `scripts/legacy/DiagnoseDV-hardcoded-eu-v1.ps1` | Legacy hard-coded EU Deep Visibility diagnostic |
-| `scripts/connectivity/S1-VisibilityCloud-Diagnostics-hardcoded-eu.ps1` | Connectivity-only Visibility Cloud diagnostic |
+The script is read-only. It does not change SentinelOne agent configuration, firewall rules, proxy settings, registry values, or services.
+
+It checks:
+
+- SentinelOne service and process status
+- Deep Visibility registry configuration
+- DNS resolution for the supplied Visibility host
+- TCP 443 connectivity
+- TLS 1.2 behavior with relaxed handling for DV endpoints
+- WinHTTP, IE/system, and environment proxy context
+- Windows Firewall profile and SentinelOne-related rules
+- SentinelOne agent log metadata and recent relevant log lines
+- Basic system and network connection information
+
+## Output
+
+The script writes a timestamped JSON report to:
+
+```text
+C:\Windows\Temp\S1-DeepVisibilityDiag_<timestamp>.json
+```
+
+Exit codes:
+
+- `0`: no critical or warning findings
+- `1`: at least one critical finding
+- `2`: warnings only
 
 ## Documentation
 
-Word documents are kept under `docs/docx/`. Text conversions are kept under `docs/text/` for easier review in GitHub.
-
-## Usage
-
-Run PowerShell as Administrator on the Windows endpoint:
-
-```powershell
-Set-ExecutionPolicy Bypass -Scope Process -Force
-.\DiagnoseNET.ps1 -S1VisibilityHost "ioc-gw-prod-eu-1b.sentinelone.net" -VerboseOutput
-```
-
-The recommended packaged script writes its report to:
+Documentation is kept in:
 
 ```text
-%TEMP%\S1-DeepVisibilityDiag.json
+docs/docx/Deep-Visibility-Inactivity-Troubleshooting-Guide.docx
+docs/text/Deep-Visibility-Inactivity-Troubleshooting-Guide.txt
 ```
 
-## Notes
+## Validation Notes
 
-- These scripts are read-only diagnostics.
-- Prior endpoint run artifacts were not included because JSON/stdout outputs may contain customer or host-specific data.
-- PowerShell syntax validation was not run locally because `pwsh` was not installed on the packaging Mac.
+The script was reviewed locally for structure and obvious syntax issues. PowerShell parser validation was not run on the packaging machine because `pwsh` is not installed there.
+
+No active/remediation version is included. The locally found scripts were diagnostic/read-only variants, and adding remediation behavior without a defined operational requirement would change the risk profile of the tool.
