@@ -1,0 +1,5 @@
+.DS_Store
+*.tmp
+*.log
+S1-DeepVisibilityDiag*.json
+stdout_*.txt

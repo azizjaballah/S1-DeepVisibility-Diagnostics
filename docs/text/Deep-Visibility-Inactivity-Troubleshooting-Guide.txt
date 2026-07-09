@@ -1,0 +1,191 @@
+Deep Visibility Inactivity – README
+(for S1-DeepVisibility-PassiveDiag.ps1) 
+1. Purpose of this script 
+The PowerShell script S1-DeepVisibility-PassiveDiag.ps1 is designed to help identify why certain endpoints are not sending Deep Visibility (DV) data to SentinelOne, even though the agent appears in the management console. 
+The script: 
+	•	Runs read-only diagnostics (no configuration changes) 
+	•	Focuses on local agent health and network connectivity to the Deep Visibility gateway 
+	•	Produces a JSON report summarizing detected issues 
+It is intended to be used on endpoints that have been identified as “no DV data” by QGroup or SentinelOne. 
+2. Prerequisites 
+	•	Windows endpoint with a SentinelOne agent installed. 
+	•	PowerShell (version 5 or higher, standard on supported Windows versions). 
+	•	Local administrative rights to run the script (Run as Administrator). 
+	•	Knowledge of the Deep Visibility gateway host used by your SentinelOne tenant   (for example: ioc-gw-prod-eu-1b.sentinelone.net). 
+	•	Connectivity to the following URLs and IPs is checked:
+	•	https://dv-eu-prod.sentinelone.net
+	•	https://ioc-gw-eu.sentinelone.net
+	•	https://ioc-gw-eu-1a.sentinelone.net
+	•	https://ioc-gw-eu-1b.sentinelone.net
+	•	https://ioc-gw-eu-1c.sentinelone.net
+	•	18.195.202.253
+	•	18.195.205.47
+	•	18.196.241.73
+	•	34.224.32.67
+
+3. Files provided 
+You will receive: 
+	•	List of affected endpoints (e.g. CSV or Excel) 
+	•	PowerShell script: S1-DeepVisibility-PassiveDiag.ps1 
+	•	Quick Guide: a short text file showing basic execution commands 
+	•	(Optional) This Troubleshooting Guide as README 
+4. How to run the script 
+4.1. On a single endpoint 
+	•	Copy S1-DeepVisibility-PassiveDiag.ps1 to the endpoint. 
+	•	Open PowerShell as Administrator (Right-click → “Run as administrator”). 
+	•	In PowerShell, navigate to the folder where the script is located, for example: 
+	•	cd C:\Users\Public\Downloads 
+	•	Allow script execution for this session: 
+	•	Set-ExecutionPolicy Bypass -Scope Process -Force 
+	•	Run the script, specifying your Deep Visibility gateway host: .\S1-DeepVisibility-PassiveDiag.ps1 -S1VisibilityHost "ioc-gw-prod-eu-1b.sentinelone.net" -VerboseOutput 
+	•	When finished, the script writes its diagnostic output to: C:\Windows\Temp\S1-DeepVisibilityDiag.json 
+	•	You can provide this JSON file to your internal security team if further analysis is required. 
+5. What the script checks 
+The script performs several groups of checks. 
+5.1. Agent and system status 
+	•	Whether the SentinelAgent service exists and is running 
+	•	Agent version and installation path 
+	•	Whether core agent processes are running: 
+	•	SentinelAgent 
+	•	SentinelAgentWorker 
+	•	SentinelStaticEngine 
+	•	Basic OS information: 
+	•	OS version and build 
+	•	Last boot time 
+	•	Time zone 
+5.2. Deep Visibility configuration 
+From the registry (HKLM:\SOFTWARE\SentinelOne\Sentinel Agent), the script checks for: 
+	•	DeepVisibilityEnabled 
+	•	DeepVisibilityMode 
+	•	NetworkQuarantineEnabled 
+	•	Additional metadata such as AgentId, SiteId, ManagementUrl (if present) 
+5.3. Network and TLS connectivity 
+For the provided Deep Visibility host (-S1VisibilityHost), the script tests: 
+	•	DNS resolution 
+	•	Uses Resolve-DnsName to confirm the host can be resolved. 
+	•	TCP port 443 
+	•	Uses Test-NetConnection to check outbound HTTPS reachability. 
+	•	TLS 1.2 test 
+	•	Uses Invoke-WebRequest with TLS 1.2 enforced. 
+	•	Differentiates between: 
+	•	Normal HTTP responses (2xx–4xx) 
+	•	HTTP 407 Proxy Authentication Required 
+	•	Other TLS or HTTP failures 
+Note: DV gateways may reject non-agent requests with application-level errors. The script is designed to treat such responses as connectivity OK unless they indicate a proxy problem (407). 
+5.4. Proxy and firewall context 
+	•	WinHTTP proxy settings (netsh winhttp show proxy) 
+	•	Internet Explorer / system proxy configuration in the current user hive 
+	•	Environment variables: HTTP_PROXY, HTTPS_PROXY 
+	•	Basic Windows Firewall status: 
+	•	Profiles enabled (Domain, Private, Public) 
+	•	Presence of firewall rules with names containing “Sentinel” or “S1” 
+5.5. Agent logs and active connections 
+	•	Checks common agent log paths (if present): 
+	•	C:\ProgramData\SentinelOne\Logs\Agent\SentinelAgent.log 
+	•	C:\Program Files\SentinelOne\Sentinel Agent\Logs\SentinelAgent.log 
+	•	Collects: 
+	•	Log size and last modification time 
+	•	Up to 10 recent lines containing ERROR, WARN, FAIL or “Deep Visibility” 
+	•	Summarises active TCP connections and highlights any connections to: 
+	•	Hosts containing sentinelone 
+	•	Remote port 443 (HTTPS) 
+6. Interpretation of results 
+The JSON report contains a field DetectedIssues, which is an array of human-readable messages.   Each message is tagged with one of three levels: 
+	•	CRITICAL: – functionality is impaired; DV likely not working 
+	•	WARNING: – potential issues that may degrade or restrict DV 
+	•	INFO: – information and hints; not necessarily a problem 
+The script’s exit code also reflects severity: 
+	•	0 – No critical or warning issues detected 
+	•	1 – One or more CRITICAL issues found 
+	•	2 – No critical issues, but one or more WARNING issues found 
+Below are common scenarios and suggested next steps. 
+7. Common findings and recommended actions 
+7.1. Agent service not running (CRITICAL) 
+Message example: 
+CRITICAL: SentinelAgent service is Stopped   CRITICAL: SentinelAgent service not found 
+What this means: 
+	•	The SentinelOne Windows service is not running or missing. 
+	•	DV (and possibly core protection) is not functioning on this endpoint. 
+What you can do: 
+	•	Check the Windows Event Logs (Application and System) for service-related errors. 
+	•	Verify that the SentinelOne agent is correctly installed. 
+	•	Attempt to restart the service: 
+      Restart-Service SentinelAgent 
+	•	If the service repeatedly fails to start, involve your internal IT or SentinelOne/QGroup support. 
+7.2. DNS resolution failed (CRITICAL) 
+Message example: 
+CRITICAL: Cannot resolve ioc-gw-prod-eu-1b.sentinelone.net 
+What this means: 
+	•	The endpoint cannot resolve the DV gateway hostname via DNS. 
+What you can do: 
+	•	Verify DNS server configuration for the endpoint. 
+	•	Ensure no internal DNS override or blocked zone exists for *.sentinelone.net. 
+	•	Confirm that the endpoint can resolve other external hosts (e.g. www.microsoft.com). 
+7.3. TCP port 443 blocked (CRITICAL) 
+Message example: 
+CRITICAL: Cannot reach ioc-gw-prod-eu-1b.sentinelone.net on port 443 
+What this means: 
+	•	The endpoint cannot open an outbound HTTPS connection to the DV gateway. 
+What you can do: 
+	•	Check Windows Firewall rules on the endpoint. 
+	•	Verify corporate firewall/proxy rules to ensure outbound HTTPS to the DV gateway is allowed. 
+	•	Confirm that no security product (NAC, NIPS, etc.) is blocking or dropping this traffic. 
+7.4. Proxy authentication required – HTTP 407 (CRITICAL) 
+Message example: 
+CRITICAL: HTTP 407 Proxy Authentication Required for https://… – proxy prevents Deep Visibility connectivity. 
+What this means: 
+	•	Traffic to the DV gateway is intercepted by a proxy that requires authentication. 
+	•	The SentinelOne agent cannot satisfy this requirement and cannot reach DV. 
+What you can do: 
+	•	Work with your network/proxy administrators to: 
+	•	Bypass authentication for SentinelOne DV traffic, or 
+	•	Grant appropriate access for the agent if supported. 
+	•	Ensure that the DV gateway host (and required SentinelOne domains) are allowed through without blocking or modification. 
+7.5. Agent processes not running (WARNING) 
+Message example: 
+WARNING: SentinelAgent process not running 
+What this means: 
+	•	Some background processes that belong to the agent are not running. 
+	•	DV or other functions might be degraded. 
+What you can do: 
+	•	Review Event Logs and the SentinelOne agent logs for recent errors. 
+	•	Restart the SentinelAgent service. 
+	•	If the issue persists, consider reinstalling or upgrading the agent. 
+7.6. Network quarantine enabled (WARNING) 
+Message example: 
+WARNING: Agent is in network quarantine mode 
+What this means: 
+	•	The endpoint is quarantined by policy. 
+	•	Network communication, including DV, may be restricted. 
+What you can do: 
+	•	Review the endpoint’s status and policy in the SentinelOne console. 
+	•	If quarantine is not desired, adjust the policy and release the endpoint from quarantine. 
+7.7. TLS test failed (INFO) 
+Message example: 
+INFO: TLS 1.2 test failed – this may be normal for Deep Visibility endpoints that reject non agent requests. 
+What this means: 
+	•	The script’s synthetic TLS test did not receive a standard success response. 
+	•	However, DV endpoints may intentionally reject non-agent HTTP patterns. 
+What you can do: 
+	•	Treat this as informational, especially if DNS and TCP 443 are working. 
+	•	Focus primarily on DNS, TCP, proxy, and agent health findings. 
+7.8. DV configuration missing in registry (INFO) 
+Message example: 
+INFO: Deep Visibility configuration not in registry (may be managed only by console) 
+What this means: 
+	•	No local DV configuration keys were found. 
+	•	Depending on your policy and agent version, this may be normal. 
+What you can do: 
+	•	Confirm DV is enabled for the site or group in the SentinelOne management console. 
+	•	Compare results with a known good endpoint that is sending DV data. 
+  -----------------------------------------MAYBE:  8. When to escalate 
+If, after: 
+	•	Running the script on affected endpoints 
+	•	Reviewing CRITICAL and WARNING findings 
+	•	Checking firewalls, proxies, DNS, and local configuration 
+your internal technical team does not identify a clear cause or cannot remediate the problem, please contact QGroup SecOps with: 
+	•	The S1-DeepVisibilityDiag.json files from one or more affected endpoints 
+	•	A short description of your network/proxy environment 
+	•	Any observations from your internal troubleshooting 
+QGroup can then support you in further analysis and remediation planning. 
+
